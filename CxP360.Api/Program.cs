@@ -1,14 +1,19 @@
+using CxP360.Api.Data;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
+// ---------- Servicios ----------
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Conexión a SQL Server con Entity Framework Core
+builder.Services.AddDbContext<CxP360DbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("CxP360")));
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ---------- Recorrido de cada petición ----------
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
