@@ -1,6 +1,247 @@
+# ======================================================================
+#  CxP360 – Pruebas de la API
+#  Ejecuta las peticiones EN ORDEN con "Send Request".
+#  Las que crean registros (POST) dan 409 si se repiten: es lo esperado.
+# ======================================================================
+
 @host = http://localhost:5288
 
+########################################################################
+# PARTE 3.4 – SEGURIDAD
+########################################################################
+
+### 1. Salud (público) → 200
 GET {{host}}/api/salud
-Accept: application/json
+
+### 2. Perfil SIN token → 401
+GET {{host}}/api/auth/perfil
+
+### 3. Login con contraseña incorrecta → 401
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "nombreUsuario": "admin",
+  "password": "ContraseñaEquivocada"
+}
+
+### 4. Login del Administrador → 200 con token
+# @name loginAdmin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "nombreUsuario": "admin",
+  "password": "Admin2026!"
+}
+
+### 5. Perfil CON token → 200, rol Administrador
+GET {{host}}/api/auth/perfil
+Authorization: Bearer {{loginAdmin.response.body.token}}
+
+########################################################################
+# PARTE 3.5 – PARÁMETROS (Administrador)
+########################################################################
+
+### 6. Ver configuración → 200
+GET {{host}}/api/configuracion
+Authorization: Bearer {{loginAdmin.response.body.token}}
+
+### 7. Modificar configuración → 200
+PUT {{host}}/api/configuracion
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{
+  "nombre": "Ferretería Los Esclavos",
+  "nit": "9876543-2",
+  "direccion": "Aldea Los Esclavos, Cuilapa, Santa Rosa",
+  "telefono": "7886-0000",
+  "porcentajeIva": 12,
+  "diasCreditoDefault": 30
+}
+
+### 8. IVA inválido (150 %) → 400 con mensaje en español
+PUT {{host}}/api/configuracion
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{
+  "nombre": "Ferretería Los Esclavos",
+  "nit": "9876543-2",
+  "direccion": "Aldea Los Esclavos, Cuilapa, Santa Rosa",
+  "telefono": "7886-0000",
+  "porcentajeIva": 150,
+  "diasCreditoDefault": 30
+}
+
+### 9. Formas de pago activas → 200
+GET {{host}}/api/formas-pago?soloActivas=true
+Authorization: Bearer {{loginAdmin.response.body.token}}
+
+### 10. Bancos → 200
+GET {{host}}/api/bancos
+Authorization: Bearer {{loginAdmin.response.body.token}}
+
+### 11. Agregar banco → 201 (la segunda vez → 409)
+POST {{host}}/api/bancos
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{
+  "nombre": "Banco Azteca"
+}
+
+### 12. Banco duplicado → 409
+POST {{host}}/api/bancos
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{
+  "nombre": "Banrural"
+}
+
+### 13. Crear usuario Operador → 201 (la segunda vez → 409)
+POST {{host}}/api/usuarios
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{
+  "nombreCompleto": "Encargado de compras",
+  "nombreUsuario": "operador",
+  "password": "Operador2026!",
+  "rol": "Operador"
+}
+
+### 14. Listar usuarios → 200 (sin contraseñas)
+GET {{host}}/api/usuarios
+Authorization: Bearer {{loginAdmin.response.body.token}}
+
+########################################################################
+# PERMISOS POR ROL (RN-31)
+########################################################################
+
+### 15. Login del Operador → 200
+# @name loginOperador
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "nombreUsuario": "operador",
+  "password": "Operador2026!"
+}
+
+### 16. Operador CONSULTA la configuración → 200
+GET {{host}}/api/configuracion
+Authorization: Bearer {{loginOperador.response.body.token}}
+
+### 17. Operador intenta MODIFICAR la configuración → 403 Forbidden
+PUT {{host}}/api/configuracion
+Authorization: Bearer {{loginOperador.response.body.token}}
+Content-Type: application/json
+
+{
+  "nombre": "Intento no autorizado",
+  "nit": "9876543-2",
+  "direccion": "Aldea Los Esclavos, Cuilapa, Santa Rosa",
+  "telefono": "7886-0000",
+  "porcentajeIva": 12,
+  "diasCreditoDefault": 30
+}
+
+### 18. Operador intenta ver usuarios → 403 Forbidden
+GET {{host}}/api/usuarios
+Authorization: Bearer {{loginOperador.response.body.token}}
+
+########################################################################
+# PARTE 3.6 – PROVEEDORES (Operador)
+########################################################################
+
+### 19. Listar proveedores con su saldo → 200
+GET {{host}}/api/proveedores
+Authorization: Bearer {{loginOperador.response.body.token}}
+
+### 20. Buscar por nombre (sin importar tildes) → 200
+GET {{host}}/api/proveedores?buscar=electrica
+Authorization: Bearer {{loginOperador.response.body.token}}
+
+### 21. Registrar proveedor SIN días de crédito → 201, toma 30 por defecto (RN-07)
+# @name nuevoProveedor
+POST {{host}}/api/proveedores
+Authorization: Bearer {{loginOperador.response.body.token}}
+Content-Type: application/json
+
+{
+  "nit": "2468135-9",
+  "nombre": "Ferretería Mayorista de Jalapa",
+  "contacto": "Pedro Morales",
+  "telefono": "7922-1010",
+  "correo": "ventas@mayoristajalapa.com",
+  "direccion": "Jalapa, Jalapa"
+}
+
+### 22. NIT duplicado → 409 (RN-06)
+POST {{host}}/api/proveedores
+Authorization: Bearer {{loginOperador.response.body.token}}
+Content-Type: application/json
+
+{
+  "nit": "4521367-1",
+  "nombre": "Otro proveedor con NIT repetido"
+}
+
+### 23. Datos inválidos: sin nombre y 150 días → 400 con ambos errores
+POST {{host}}/api/proveedores
+Authorization: Bearer {{loginOperador.response.body.token}}
+Content-Type: application/json
+
+{
+  "nit": "1357924-6",
+  "nombre": "",
+  "diasCredito": 150
+}
+
+### 24. Correo inválido → 400
+POST {{host}}/api/proveedores
+Authorization: Bearer {{loginOperador.response.body.token}}
+Content-Type: application/json
+
+{
+  "nit": "1357924-6",
+  "nombre": "Proveedor con correo malo",
+  "correo": "esto-no-es-un-correo"
+}
+
+### 25. Modificar el proveedor creado → 200, ahora con 45 días
+PUT {{host}}/api/proveedores/{{nuevoProveedor.response.body.id}}
+Authorization: Bearer {{loginOperador.response.body.token}}
+Content-Type: application/json
+
+{
+  "nit": "2468135-9",
+  "nombre": "Ferretería Mayorista de Jalapa, S.A.",
+  "contacto": "Pedro Morales",
+  "telefono": "7922-1010",
+  "correo": "ventas@mayoristajalapa.com",
+  "direccion": "Barrio El Centro, Jalapa",
+  "diasCredito": 45
+}
+
+### 26. Inactivar el proveedor → 200, activo: false (RF-12)
+PUT {{host}}/api/proveedores/{{nuevoProveedor.response.body.id}}/estado
+Authorization: Bearer {{loginOperador.response.body.token}}
+Content-Type: application/json
+
+{
+  "activo": false
+}
+
+### 27. Solo proveedores activos → 200, ya no aparece el inactivado
+GET {{host}}/api/proveedores?soloActivos=true
+Authorization: Bearer {{loginOperador.response.body.token}}
+
+### 28. Proveedor inexistente → 404
+GET {{host}}/api/proveedores/9999
+Authorization: Bearer {{loginOperador.response.body.token}}
 
 ###
