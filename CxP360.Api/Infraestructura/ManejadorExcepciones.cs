@@ -16,10 +16,15 @@ public class ManejadorExcepciones(ILogger<ManejadorExcepciones> logger, IHostEnv
     {
         var (status, titulo) = ex switch
         {
+            ConfirmacionRequeridaException => (StatusCodes.Status409Conflict, ex.Message),
             NoEncontradoException       => (StatusCodes.Status404NotFound, ex.Message),
             ConflictoException          => (StatusCodes.Status409Conflict, ex.Message),
             ReglaNegocioException       => (StatusCodes.Status400BadRequest, ex.Message),
             UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, ex.Message),
+
+            // Dos usuarios modificaron la misma factura al mismo tiempo
+            DbUpdateConcurrencyException
+                => (StatusCodes.Status409Conflict, "La factura fue modificada por otro usuario al mismo tiempo. Actualice e intente de nuevo."),
 
             // Respaldo: errores que detecta SQL Server (sección 10.2 del análisis)
             DbUpdateException { InnerException: SqlException { Number: 2627 or 2601 } }
@@ -40,6 +45,10 @@ public class ManejadorExcepciones(ILogger<ManejadorExcepciones> logger, IHostEnv
             // El detalle técnico solo se muestra en desarrollo
             Detail = status == StatusCodes.Status500InternalServerError && env.IsDevelopment() ? ex.ToString() : null
         };
+
+        // RN-25: la pantalla sabrá que debe pedir confirmación al usuario
+        if (ex is ConfirmacionRequeridaException)
+            problema.Extensions["requiereConfirmacion"] = true;
 
         http.Response.StatusCode = status;
         await http.Response.WriteAsJsonAsync(problema, options: null, contentType: "application/problem+json", ct);

@@ -77,6 +77,10 @@ public class CxP360DbContext(DbContextOptions<CxP360DbContext> options) : DbCont
             e.Property(x => x.Estado).HasConversion<string>();                    // se guarda como texto
             e.Property(x => x.FechaRegistro).HasDefaultValueSql("SYSDATETIME()");
 
+            // Control de concurrencia: si dos usuarios pagan la misma factura al mismo
+            // tiempo, el segundo recibe un error en lugar de sobrescribir el saldo.
+            e.Property(x => x.Saldo).IsConcurrencyToken();
+
             e.HasOne(x => x.Usuario)
              .WithMany()
              .HasForeignKey(x => x.UsuarioId)

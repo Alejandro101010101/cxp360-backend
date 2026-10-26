@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using CxP360.Api.Configuracion;
 using CxP360.Api.Data;
 using CxP360.Api.Infraestructura;
@@ -16,6 +17,8 @@ var builder = WebApplication.CreateBuilder(args);
 // ======================================================================
 
 builder.Services.AddControllers()
+    // Los estados y roles viajan como texto ("Pendiente") y no como número
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
     .ConfigureApiBehaviorOptions(options =>
     {
         // RF-32: errores de validación con título en español

@@ -1,0 +1,358 @@
+# ======================================================================
+#  CxP360 – Pruebas de FACTURAS
+#  Ejecuta las peticiones EN ORDEN con "Send Request".
+#  Requiere haber ejecutado antes las pruebas de CxP360.Api.http
+#  (usuario "operador" creado y proveedor de Jalapa inactivado).
+#
+#  Ids de catálogo (script 01):
+#    Formas de pago: 1 Efectivo · 2 Cheque · 3 Transferencia · 4 Depósito
+#    Bancos:         1 Banrural · 2 Banco Industrial · 3 BAM ...
+# ======================================================================
+
+@host = http://localhost:5288
+
+### 0.1 Login del Operador
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "nombreUsuario": "operador",
+  "password": "Operador2026!"
+}
+
+### 0.2 Buscar proveedor Cementos del Sur (30 días de crédito)
+# @name provCementos
+GET {{host}}/api/proveedores?buscar=4521367-1
+Authorization: Bearer {{login.response.body.token}}
+
+### 0.3 Buscar proveedor Hierros y Aceros (60 días de crédito)
+# @name provHierros
+GET {{host}}/api/proveedores?buscar=3698524-7
+Authorization: Bearer {{login.response.body.token}}
+
+### 0.4 Buscar proveedor inactivo (Mayorista de Jalapa)
+# @name provInactivo
+GET {{host}}/api/proveedores?buscar=2468135-9
+Authorization: Bearer {{login.response.body.token}}
+
+########################################################################
+# 3.7 – FACTURAS
+########################################################################
+
+### F1. Registrar factura con 2 líneas → 201
+#      Total Q5,235.00 = Base Q4,674.11 + IVA Q560.89 (RN-14)
+#      Vence 2026-10-20 = emisión + 30 días (RN-13) → ya aparece VENCIDA
+# @name factura1
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{provCementos.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "1001",
+  "fechaEmision": "2026-09-20",
+  "lineas": [
+    { "descripcion": "Cemento UGC 42.5 kg", "cantidad": 50, "precioUnitario": 89.50 },
+    { "descripcion": "Cal hidratada 25 kg", "cantidad": 20, "precioUnitario": 38.00 }
+  ]
+}
+
+### F2. Misma factura otra vez → 409 (RN-10, RF-30)
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{provCementos.response.body.$[0].id}},
+  "serie": "a",
+  "numero": "1001",
+  "fechaEmision": "2026-09-20",
+  "lineas": [ { "descripcion": "Cemento", "cantidad": 1, "precioUnitario": 89.50 } ]
+}
+
+### F3. Fecha de emisión futura → 400 (RN-11)
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{provCementos.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "9999",
+  "fechaEmision": "2030-01-01",
+  "lineas": [ { "descripcion": "Cemento", "cantidad": 1, "precioUnitario": 89.50 } ]
+}
+
+### F4. Sin líneas de detalle → 400 (RN-12)
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{provCementos.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "9998",
+  "fechaEmision": "2026-10-01",
+  "lineas": []
+}
+
+### F5. Línea con cantidad 0 → 400 (RN-12)
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{provCementos.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "9997",
+  "fechaEmision": "2026-10-01",
+  "lineas": [ { "descripcion": "Cemento", "cantidad": 0, "precioUnitario": 89.50 } ]
+}
+
+### F6. Factura a proveedor INACTIVO → 400 (RN-08)
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{provInactivo.response.body.$[0].id}},
+  "serie": "B",
+  "numero": "500",
+  "fechaEmision": "2026-10-01",
+  "lineas": [ { "descripcion": "Tornillos", "cantidad": 100, "precioUnitario": 0.75 } ]
+}
+
+### F7. Factura de Hierros y Aceros (60 días), queda VENCIDA sin pagar → 201
+#      Total Q4,512.50 = Base Q4,029.02 + IVA Q483.48
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{provHierros.response.body.$[0].id}},
+  "serie": "FAC",
+  "numero": "3050",
+  "fechaEmision": "2026-07-01",
+  "lineas": [
+    { "descripcion": "Varilla de hierro 3/8 x 6 m", "cantidad": 100, "precioUnitario": 42.75 },
+    { "descripcion": "Alambre de amarre (libra)", "cantidad": 25, "precioUnitario": 9.50 }
+  ]
+}
+
+########################################################################
+# 3.8 – PAGOS (sobre la factura A-1001 de Q5,235.00)
+########################################################################
+
+### P1. Abono en EFECTIVO de Q2,000 → 201, saldo Q3,235.00, estado Parcial
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-10-25",
+  "monto": 2000.00,
+  "formaPagoId": 1
+}
+
+### P2. El MISMO abono otra vez → 409 con "requiereConfirmacion": true (RN-25)
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-10-25",
+  "monto": 2000.00,
+  "formaPagoId": 1
+}
+
+### P3. El mismo abono CONFIRMADO → 201, saldo Q1,235.00
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-10-25",
+  "monto": 2000.00,
+  "formaPagoId": 1,
+  "confirmarDuplicado": true
+}
+
+### P4. Pago MAYOR al saldo (Q5,000) → 400 (RN-20)
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-10-25",
+  "monto": 5000.00,
+  "formaPagoId": 1
+}
+
+### P5. CHEQUE sin banco ni número → 400 (RN-23)
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-10-25",
+  "monto": 100.00,
+  "formaPagoId": 2
+}
+
+### P6. Fecha ANTERIOR a la emisión de la factura → 400 (RN-22)
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-09-01",
+  "monto": 100.00,
+  "formaPagoId": 1
+}
+
+### P7. CHEQUE #4521 de Banrural por el saldo (Q1,235) → 201, saldo 0, estado Pagada
+# @name pagoCheque
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-10-25",
+  "monto": 1235.00,
+  "formaPagoId": 2,
+  "bancoId": 1,
+  "numeroReferencia": "4521"
+}
+
+### P8. Pago a una factura PAGADA → 400 (RN-21)
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-10-25",
+  "monto": 10.00,
+  "formaPagoId": 1
+}
+
+### P9. Detalle de la factura: 2 líneas, 3 pagos, totalPagado Q5,235 → 200 (RF-18)
+GET {{host}}/api/facturas/{{factura1.response.body.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### P10. ANULAR el cheque → 200, saldo vuelve a Q1,235.00, estado Parcial (RN-26)
+PUT {{host}}/api/pagos/{{pagoCheque.response.body.id}}/anular
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "motivo": "Cheque devuelto por el banco"
+}
+
+### P11. El MISMO cheque #4521 se puede registrar de nuevo (el anterior está anulado) → 201
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-10-25",
+  "monto": 1235.00,
+  "formaPagoId": 2,
+  "bancoId": 1,
+  "numeroReferencia": "4521"
+}
+
+### P12. Cheque #4521 de Banrural OTRA VEZ (ya está activo) → 409 (RN-24)
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura1.response.body.id}},
+  "fechaPago": "2026-10-25",
+  "monto": 50.00,
+  "formaPagoId": 2,
+  "bancoId": 1,
+  "numeroReferencia": "4521"
+}
+
+########################################################################
+# ANULACIÓN DE FACTURAS
+########################################################################
+
+### A1. Anular una factura CON pagos activos → 400 (RN-17)
+PUT {{host}}/api/facturas/{{factura1.response.body.id}}/anular
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "motivo": "Prueba"
+}
+
+### A2. Registrar una factura nueva para anularla → 201
+# @name factura2
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{provCementos.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "1002",
+  "fechaEmision": "2026-10-15",
+  "lineas": [ { "descripcion": "Tubo PVC 1/2 pulgada", "cantidad": 10, "precioUnitario": 18.00 } ]
+}
+
+### A3. Anular la factura sin pagos → 200, estado Anulada (RF-19)
+PUT {{host}}/api/facturas/{{factura2.response.body.id}}/anular
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "motivo": "Factura registrada con datos incorrectos"
+}
+
+### A4. Anular sin motivo → 400
+PUT {{host}}/api/facturas/{{factura2.response.body.id}}/anular
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "motivo": ""
+}
+
+########################################################################
+# CONSULTAS
+########################################################################
+
+### C1. Todas las facturas → 200
+GET {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+
+### C2. Solo facturas VENCIDAS → 200, aparece FAC-3050 con sus días de atraso (RN-19)
+GET {{host}}/api/facturas?estado=Vencida
+Authorization: Bearer {{login.response.body.token}}
+
+### C3. Pagos del proveedor Cementos del Sur (sin anulados) → 200 (RF-23)
+GET {{host}}/api/pagos?proveedorId={{provCementos.response.body.$[0].id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### C4. Pagos incluyendo anulados → 200, aparece el cheque anulado
+GET {{host}}/api/pagos?proveedorId={{provCementos.response.body.$[0].id}}&incluirAnulados=true
+Authorization: Bearer {{login.response.body.token}}
+
+### C5. Saldo actualizado de los proveedores → 200 (RF-13, RN-09)
+GET {{host}}/api/proveedores
+Authorization: Bearer {{login.response.body.token}}
+
+###
