@@ -1,0 +1,96 @@
+# ======================================================================
+#  CxP360 – Pruebas de REPORTES y PANEL DE INICIO (3.9)
+#  Ejecuta las peticiones EN ORDEN con "Send Request".
+#  Los resultados esperados corresponden a los datos creados con
+#  Pruebas-Facturas-Pagos.http:
+#    · Cementos del Sur (id 1): factura A-1001 de Q5,235.00, PAGADA
+#      (abonos de Q2,000 + Q2,000 + cheque de Q1,235; un cheque anulado)
+#    · Hierros y Aceros (id 2): factura FAC-3050 de Q4,512.50, VENCIDA
+# ======================================================================
+
+@host = http://localhost:5288
+
+### 0. Login
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "nombreUsuario": "admin",
+  "password": "Admin2026!"
+}
+
+########################################################################
+# PANEL DE INICIO (RF-04)
+########################################################################
+
+### D1. Indicadores → 200
+#   totalAdeudado 4512.50 · facturasVencidas 1 · pagadoMes 5235.00 (3 pagos)
+#   masVencidas: FAC-3050 · mayoresSaldos: Hierros y Aceros
+GET {{host}}/api/dashboard
+Authorization: Bearer {{login.response.body.token}}
+
+########################################################################
+# ESTADO DE CUENTA (RF-25, RN-27)
+########################################################################
+
+### E1. Cementos del Sur, septiembre y octubre → 200
+#   saldoInicial 0 · cargos 5235.00 · abonos 5235.00 · saldoFinal 0
+#   El cheque anulado y la factura A-1002 anulada NO aparecen (RN-28)
+GET {{host}}/api/reportes/estado-cuenta?proveedorId=1&desde=2026-09-01&hasta=2026-10-31
+Authorization: Bearer {{login.response.body.token}}
+
+### E2. Cementos del Sur, solo octubre → 200
+#   saldoInicial 5235.00 (la factura es de septiembre) · abonos 5235.00 · saldoFinal 0
+GET {{host}}/api/reportes/estado-cuenta?proveedorId=1&desde=2026-10-01&hasta=2026-10-31
+Authorization: Bearer {{login.response.body.token}}
+
+### E3. Hierros y Aceros, sin fechas (mes actual) → 200
+#   saldoInicial 4512.50 (factura de julio) · sin movimientos · saldoFinal 4512.50
+GET {{host}}/api/reportes/estado-cuenta?proveedorId=2
+Authorization: Bearer {{login.response.body.token}}
+
+### E4. Fechas invertidas → 400
+GET {{host}}/api/reportes/estado-cuenta?proveedorId=1&desde=2026-10-31&hasta=2026-10-01
+Authorization: Bearer {{login.response.body.token}}
+
+### E5. Proveedor inexistente → 404
+GET {{host}}/api/reportes/estado-cuenta?proveedorId=9999
+Authorization: Bearer {{login.response.body.token}}
+
+########################################################################
+# PENDIENTES Y VENCIDAS (RF-26)
+########################################################################
+
+### R1. Facturas pendientes y vencidas → 200
+#   cantidad 1 · totalSaldo 4512.50 · cantidadVencidas 1
+GET {{host}}/api/reportes/pendientes
+Authorization: Bearer {{login.response.body.token}}
+
+### R2. Solo vencidas → 200
+GET {{host}}/api/reportes/pendientes?soloVencidas=true
+Authorization: Bearer {{login.response.body.token}}
+
+########################################################################
+# ANTIGÜEDAD DE SALDOS (RF-27, RN-29)
+########################################################################
+
+### R3. Antigüedad → 200
+#   Hierros y Aceros: Q4,512.50 en el rango de31a60 (vencida el 30/08)
+GET {{host}}/api/reportes/antiguedad-saldos
+Authorization: Bearer {{login.response.body.token}}
+
+########################################################################
+# PAGOS POR PERÍODO (RF-28)
+########################################################################
+
+### R4. Pagos de octubre → 200
+#   cantidad 3 · total 5235.00 · Efectivo 2 pagos Q4,000 · Cheque 1 pago Q1,235
+GET {{host}}/api/reportes/pagos?desde=2026-10-01&hasta=2026-10-31
+Authorization: Bearer {{login.response.body.token}}
+
+### R5. Solo pagos con cheque (formaPagoId 2) → 200, 1 pago
+GET {{host}}/api/reportes/pagos?desde=2026-10-01&hasta=2026-10-31&formaPagoId=2
+Authorization: Bearer {{login.response.body.token}}
+
+###
