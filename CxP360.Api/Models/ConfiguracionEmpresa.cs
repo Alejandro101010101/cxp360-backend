@@ -13,6 +13,9 @@ public class ConfiguracionEmpresa
     public decimal PorcentajeIva { get; set; }
     public int DiasCreditoDefault { get; set; }
 
+    /// <summary>RN-36: monto máximo de un pago en efectivo. NULL = sin límite.</summary>
+    public decimal? LimitePagoEfectivo { get; set; }
+
     /// <summary>RN-14: base imponible de un total con IVA incluido.</summary>
     public decimal CalcularBase(decimal total) =>
         Math.Round(total / (1 + PorcentajeIva / 100m), 2, MidpointRounding.AwayFromZero);

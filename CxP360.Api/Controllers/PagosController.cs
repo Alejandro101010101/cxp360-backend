@@ -80,6 +80,19 @@ public class PagosController(CxP360DbContext db) : ControllerBase
                 throw new ConflictoException($"Ya está registrado un pago con {forma.Nombre} No. {referencia} de {banco.Nombre}.");
         }
 
+        // RN-33: cheque, transferencia y depósito requieren su comprobante
+        if (forma.RequiereReferencia && request.Comprobante is null)
+            throw new ReglaNegocioException($"Debe adjuntar la foto o el PDF del comprobante de {forma.Nombre.ToLowerInvariant()}.");
+
+        // RN-36: límite para pagos en efectivo
+        if (!forma.RequiereReferencia)
+        {
+            var limite = await db.ConfiguracionEmpresa.Select(c => c.LimitePagoEfectivo).FirstAsync();
+            if (limite is not null && request.Monto > limite)
+                throw new ReglaNegocioException(
+                    $"Los pagos en efectivo no pueden superar Q{limite:N2}. Use cheque, transferencia o depósito.");
+        }
+
         // RN-22: fecha entre la emisión de la factura y hoy
         if (request.FechaPago < factura.FechaEmision)
             throw new ReglaNegocioException($"La fecha del pago no puede ser anterior a la emisión de la factura ({factura.FechaEmision:dd/MM/yyyy}).");
@@ -112,8 +125,11 @@ public class PagosController(CxP360DbContext db) : ControllerBase
             FechaRegistro = Reloj.Ahora
         };
 
+        if (request.Comprobante is not null)
+            pago.Adjuntos.Add(Comprobantes.Crear(request.Comprobante, pago.UsuarioId));
+
         db.Pagos.Add(pago);
-        await db.SaveChangesAsync();   // el pago y el nuevo saldo de la factura se guardan en UNA transacción
+        await db.SaveChangesAsync();   // pago, comprobante y nuevo saldo de la factura en UNA transacción
 
         return CreatedAtAction(nameof(ObtenerPorId), new { id = pago.Id }, await LeerDto(pago.Id));
     }
@@ -130,6 +146,24 @@ public class PagosController(CxP360DbContext db) : ControllerBase
 
         await db.SaveChangesAsync();   // anulación y saldo restaurado en UNA transacción
         return Ok(await LeerDto(id));
+    }
+
+    /// <summary>
+    /// POST /api/pagos/{id}/comprobantes: agrega un comprobante a un pago (RF-34).
+    /// Se usa sobre todo para el recibo firmado de un pago en efectivo.
+    /// </summary>
+    [HttpPost("{id:int}/comprobantes")]
+    public async Task<ActionResult<AdjuntoDto>> AgregarComprobante(int id, ArchivoRequest archivo)
+    {
+        if (!await db.Pagos.AnyAsync(p => p.Id == id))
+            throw new NoEncontradoException($"No existe el pago {id}.");
+
+        var adjunto = Comprobantes.Crear(archivo, User.ObtenerUsuarioId());
+        adjunto.PagoId = id;
+        db.Adjuntos.Add(adjunto);
+        await db.SaveChangesAsync();
+
+        return Created($"/api/adjuntos/{adjunto.Id}", await AdjuntosController.LeerDto(db, adjunto.Id));
     }
 
     private async Task<PagoDto> LeerDto(int id) =>

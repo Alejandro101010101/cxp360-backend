@@ -112,8 +112,18 @@ public class FacturasController(CxP360DbContext db) : ControllerBase
         factura.CalcularVencimiento(proveedor.DiasCredito);   // RN-13
         factura.CalcularTotales(porcentajeIva);               // RN-14: total, base e IVA
 
+        // RN-35: el total de las líneas debe coincidir con el total impreso en la factura
+        var totalDocumento = Math.Round(request.TotalDocumento, 2, MidpointRounding.AwayFromZero);
+        if (factura.Total != totalDocumento)
+            throw new ReglaNegocioException(
+                $"La suma de las líneas (Q{factura.Total:N2}) no coincide con el total de la factura " +
+                $"(Q{totalDocumento:N2}). Diferencia: Q{Math.Abs(factura.Total - totalDocumento):N2}. Revise cantidades y precios.");
+
+        // RN-32: la factura se guarda junto con su foto o PDF
+        factura.Adjuntos.Add(Comprobantes.Crear(request.Comprobante, factura.UsuarioId));
+
         db.Facturas.Add(factura);
-        await db.SaveChangesAsync();                          // encabezado + líneas en una transacción
+        await db.SaveChangesAsync();                          // encabezado + líneas + comprobante en una transacción
 
         return CreatedAtAction(nameof(ObtenerPorId), new { id = factura.Id }, await LeerDetalle(factura.Id));
     }
@@ -129,6 +139,21 @@ public class FacturasController(CxP360DbContext db) : ControllerBase
         await db.SaveChangesAsync();
 
         return Ok(await LeerDetalle(id));
+    }
+
+    /// <summary>POST /api/facturas/{id}/comprobantes: agrega otro documento a la factura (RF-34)</summary>
+    [HttpPost("{id:int}/comprobantes")]
+    public async Task<ActionResult<AdjuntoDto>> AgregarComprobante(int id, ArchivoRequest archivo)
+    {
+        if (!await db.Facturas.AnyAsync(f => f.Id == id))
+            throw new NoEncontradoException($"No existe la factura {id}.");
+
+        var adjunto = Comprobantes.Crear(archivo, User.ObtenerUsuarioId());
+        adjunto.FacturaId = id;
+        db.Adjuntos.Add(adjunto);
+        await db.SaveChangesAsync();
+
+        return Created($"/api/adjuntos/{adjunto.Id}", await AdjuntosController.LeerDto(db, adjunto.Id));
     }
 
     // ---------- Auxiliares ----------
@@ -149,6 +174,12 @@ public class FacturasController(CxP360DbContext db) : ControllerBase
             .Select(PagoMapeo.APagoDto)
             .ToListAsync();
 
+        var comprobantes = await db.Adjuntos.AsNoTracking()
+            .Where(a => a.FacturaId == id)
+            .OrderBy(a => a.Id)
+            .Select(AdjuntosController.AAdjuntoDto)
+            .ToListAsync();
+
         var (vencida, dias) = CalcularVencida(f.Estado, f.FechaVencimiento, Reloj.Hoy);
         var totalPagado = f.Estado == EstadoFactura.Anulada ? 0m : f.Total - f.Saldo;
 
@@ -161,7 +192,8 @@ public class FacturasController(CxP360DbContext db) : ControllerBase
             f.Detalles.OrderBy(d => d.Id)
                 .Select(d => new LineaFacturaDto(d.Id, d.Descripcion, d.Cantidad, d.PrecioUnitario, d.Subtotal))
                 .ToList(),
-            pagos);
+            pagos,
+            comprobantes);
     }
 
     /// <summary>RN-19: vencida = pendiente o parcial con fecha de vencimiento pasada.</summary>

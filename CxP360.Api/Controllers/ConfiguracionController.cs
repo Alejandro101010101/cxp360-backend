@@ -39,11 +39,12 @@ public class ConfiguracionController(CxP360DbContext db) : ControllerBase
         config.Telefono = request.Telefono.Trim();
         config.PorcentajeIva = request.PorcentajeIva;
         config.DiasCreditoDefault = request.DiasCreditoDefault;
+        config.LimitePagoEfectivo = request.LimitePagoEfectivo;
 
         await db.SaveChangesAsync();
         return Ok(Mapear(config));
     }
 
     private static ConfiguracionDto Mapear(ConfiguracionEmpresa c) =>
-        new(c.Nombre, c.Nit, c.Direccion, c.Telefono, c.PorcentajeIva, c.DiasCreditoDefault);
+        new(c.Nombre, c.Nit, c.Direccion, c.Telefono, c.PorcentajeIva, c.DiasCreditoDefault, c.LimitePagoEfectivo);
 }

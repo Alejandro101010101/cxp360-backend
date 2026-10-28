@@ -42,7 +42,7 @@ public class ReportesController(CxP360DbContext db) : ControllerBase
         // Cargos: facturas emitidas en el período
         var cargos = await facturas
             .Where(f => f.FechaEmision >= inicio && f.FechaEmision <= fin)
-            .Select(f => new { f.Id, f.FechaEmision, f.Serie, f.Numero, f.FechaVencimiento, f.Total })
+            .Select(f => new { f.Id, f.FechaEmision, f.Serie, f.Numero, f.FechaVencimiento, f.Total, Usuario = f.Usuario.NombreCompleto })
             .ToListAsync();
 
         // Abonos: pagos realizados en el período
@@ -53,7 +53,8 @@ public class ReportesController(CxP360DbContext db) : ControllerBase
                 p.Id, p.FechaPago, p.Monto, p.NumeroReferencia,
                 FormaPago = p.FormaPago.Nombre,
                 Banco = p.Banco != null ? p.Banco.Nombre : null,
-                p.Factura.Serie, p.Factura.Numero
+                p.Factura.Serie, p.Factura.Numero,
+                Usuario = p.Usuario.NombreCompleto
             })
             .ToListAsync();
 
@@ -62,12 +63,14 @@ public class ReportesController(CxP360DbContext db) : ControllerBase
             .Select(f => (Fecha: f.FechaEmision, Orden: 0, f.Id, Tipo: "Factura",
                           Documento: $"{f.Serie}-{f.Numero}",
                           Descripcion: $"Factura de compra, vence {f.FechaVencimiento:dd/MM/yyyy}",
+                          RegistradoPor: f.Usuario,
                           Cargo: f.Total, Abono: 0m))
             .Concat(abonos.Select(p => (Fecha: p.FechaPago, Orden: 1, p.Id, Tipo: "Pago",
                           Documento: $"{p.Serie}-{p.Numero}",
                           Descripcion: p.NumeroReferencia is null
                               ? $"Pago en {p.FormaPago}"
                               : $"Pago con {p.FormaPago} No. {p.NumeroReferencia} ({p.Banco})",
+                          RegistradoPor: p.Usuario,
                           Cargo: 0m, Abono: p.Monto)))
             .OrderBy(l => l.Fecha).ThenBy(l => l.Orden).ThenBy(l => l.Id)
             .ToList();
@@ -77,7 +80,7 @@ public class ReportesController(CxP360DbContext db) : ControllerBase
         foreach (var l in lineas)
         {
             saldo += l.Cargo - l.Abono;
-            movimientos.Add(new MovimientoCuentaDto(l.Fecha, l.Tipo, l.Documento, l.Descripcion, l.Cargo, l.Abono, saldo));
+            movimientos.Add(new MovimientoCuentaDto(l.Fecha, l.Tipo, l.Documento, l.Descripcion, l.RegistradoPor, l.Cargo, l.Abono, saldo));
         }
 
         var totalCargos = lineas.Sum(l => l.Cargo);

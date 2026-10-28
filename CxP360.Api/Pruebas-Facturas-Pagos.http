@@ -1,8 +1,11 @@
 # ======================================================================
-#  CxP360 – Pruebas de FACTURAS
+#  CxP360 – Pruebas de FACTURAS (3.7) y PAGOS (3.8)
 #  Ejecuta las peticiones EN ORDEN con "Send Request".
 #  Requiere haber ejecutado antes las pruebas de CxP360.Api.http
 #  (usuario "operador" creado y proveedor de Jalapa inactivado).
+#
+#  Desde el script 04, toda factura lleva "totalDocumento" y su
+#  "comprobante" (foto o PDF en Base64), y los cheques su voucher.
 #
 #  Ids de catálogo (script 01):
 #    Formas de pago: 1 Efectivo · 2 Cheque · 3 Transferencia · 4 Depósito
@@ -56,7 +59,9 @@ Content-Type: application/json
   "lineas": [
     { "descripcion": "Cemento UGC 42.5 kg", "cantidad": 50, "precioUnitario": 89.50 },
     { "descripcion": "Cal hidratada 25 kg", "cantidad": 20, "precioUnitario": 38.00 }
-  ]
+  ],
+  "totalDocumento": 5235.00,
+  "comprobante": { "nombreArchivo": "factura.png", "tipoContenido": "image/png", "contenido": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" }
 }
 
 ### F2. Misma factura otra vez → 409 (RN-10, RF-30)
@@ -69,7 +74,9 @@ Content-Type: application/json
   "serie": "a",
   "numero": "1001",
   "fechaEmision": "2026-09-20",
-  "lineas": [ { "descripcion": "Cemento", "cantidad": 1, "precioUnitario": 89.50 } ]
+  "lineas": [ { "descripcion": "Cemento", "cantidad": 1, "precioUnitario": 89.50 } ],
+  "totalDocumento": 89.50,
+  "comprobante": { "nombreArchivo": "factura.png", "tipoContenido": "image/png", "contenido": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" }
 }
 
 ### F3. Fecha de emisión futura → 400 (RN-11)
@@ -82,7 +89,9 @@ Content-Type: application/json
   "serie": "A",
   "numero": "9999",
   "fechaEmision": "2030-01-01",
-  "lineas": [ { "descripcion": "Cemento", "cantidad": 1, "precioUnitario": 89.50 } ]
+  "lineas": [ { "descripcion": "Cemento", "cantidad": 1, "precioUnitario": 89.50 } ],
+  "totalDocumento": 89.50,
+  "comprobante": { "nombreArchivo": "factura.png", "tipoContenido": "image/png", "contenido": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" }
 }
 
 ### F4. Sin líneas de detalle → 400 (RN-12)
@@ -95,7 +104,9 @@ Content-Type: application/json
   "serie": "A",
   "numero": "9998",
   "fechaEmision": "2026-10-01",
-  "lineas": []
+  "lineas": [],
+  "totalDocumento": 1.00,
+  "comprobante": { "nombreArchivo": "factura.png", "tipoContenido": "image/png", "contenido": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" }
 }
 
 ### F5. Línea con cantidad 0 → 400 (RN-12)
@@ -108,7 +119,9 @@ Content-Type: application/json
   "serie": "A",
   "numero": "9997",
   "fechaEmision": "2026-10-01",
-  "lineas": [ { "descripcion": "Cemento", "cantidad": 0, "precioUnitario": 89.50 } ]
+  "lineas": [ { "descripcion": "Cemento", "cantidad": 0, "precioUnitario": 89.50 } ],
+  "totalDocumento": 1.00,
+  "comprobante": { "nombreArchivo": "factura.png", "tipoContenido": "image/png", "contenido": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" }
 }
 
 ### F6. Factura a proveedor INACTIVO → 400 (RN-08)
@@ -121,7 +134,9 @@ Content-Type: application/json
   "serie": "B",
   "numero": "500",
   "fechaEmision": "2026-10-01",
-  "lineas": [ { "descripcion": "Tornillos", "cantidad": 100, "precioUnitario": 0.75 } ]
+  "lineas": [ { "descripcion": "Tornillos", "cantidad": 100, "precioUnitario": 0.75 } ],
+  "totalDocumento": 75.00,
+  "comprobante": { "nombreArchivo": "factura.png", "tipoContenido": "image/png", "contenido": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" }
 }
 
 ### F7. Factura de Hierros y Aceros (60 días), queda VENCIDA sin pagar → 201
@@ -138,7 +153,9 @@ Content-Type: application/json
   "lineas": [
     { "descripcion": "Varilla de hierro 3/8 x 6 m", "cantidad": 100, "precioUnitario": 42.75 },
     { "descripcion": "Alambre de amarre (libra)", "cantidad": 25, "precioUnitario": 9.50 }
-  ]
+  ],
+  "totalDocumento": 4512.50,
+  "comprobante": { "nombreArchivo": "factura.png", "tipoContenido": "image/png", "contenido": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" }
 }
 
 ########################################################################
@@ -230,7 +247,8 @@ Content-Type: application/json
   "monto": 1235.00,
   "formaPagoId": 2,
   "bancoId": 1,
-  "numeroReferencia": "4521"
+  "numeroReferencia": "4521",
+  "comprobante": { "nombreArchivo": "cheque-4521.pdf", "tipoContenido": "application/pdf", "contenido": "JVBERi0xLjQKJUVPRg==" }
 }
 
 ### P8. Pago a una factura PAGADA → 400 (RN-21)
@@ -269,7 +287,8 @@ Content-Type: application/json
   "monto": 1235.00,
   "formaPagoId": 2,
   "bancoId": 1,
-  "numeroReferencia": "4521"
+  "numeroReferencia": "4521",
+  "comprobante": { "nombreArchivo": "cheque-4521.pdf", "tipoContenido": "application/pdf", "contenido": "JVBERi0xLjQKJUVPRg==" }
 }
 
 ### P12. Cheque #4521 de Banrural OTRA VEZ (ya está activo) → 409 (RN-24)
@@ -283,7 +302,8 @@ Content-Type: application/json
   "monto": 50.00,
   "formaPagoId": 2,
   "bancoId": 1,
-  "numeroReferencia": "4521"
+  "numeroReferencia": "4521",
+  "comprobante": { "nombreArchivo": "cheque-4521.pdf", "tipoContenido": "application/pdf", "contenido": "JVBERi0xLjQKJUVPRg==" }
 }
 
 ########################################################################
@@ -310,7 +330,9 @@ Content-Type: application/json
   "serie": "A",
   "numero": "1002",
   "fechaEmision": "2026-10-15",
-  "lineas": [ { "descripcion": "Tubo PVC 1/2 pulgada", "cantidad": 10, "precioUnitario": 18.00 } ]
+  "lineas": [ { "descripcion": "Tubo PVC 1/2 pulgada", "cantidad": 10, "precioUnitario": 18.00 } ],
+  "totalDocumento": 180.00,
+  "comprobante": { "nombreArchivo": "factura.png", "tipoContenido": "image/png", "contenido": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" }
 }
 
 ### A3. Anular la factura sin pagos → 200, estado Anulada (RF-19)

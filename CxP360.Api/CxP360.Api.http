@@ -58,7 +58,8 @@ Content-Type: application/json
   "direccion": "Aldea Los Esclavos, Cuilapa, Santa Rosa",
   "telefono": "7886-0000",
   "porcentajeIva": 12,
-  "diasCreditoDefault": 30
+  "diasCreditoDefault": 30,
+  "limitePagoEfectivo": 5000
 }
 
 ### 8. IVA inválido (150 %) → 400 con mensaje en español
@@ -146,7 +147,8 @@ Content-Type: application/json
   "direccion": "Aldea Los Esclavos, Cuilapa, Santa Rosa",
   "telefono": "7886-0000",
   "porcentajeIva": 12,
-  "diasCreditoDefault": 30
+  "diasCreditoDefault": 30,
+  "limitePagoEfectivo": 5000
 }
 
 ### 18. Operador intenta ver usuarios → 403 Forbidden

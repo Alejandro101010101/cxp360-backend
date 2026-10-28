@@ -48,6 +48,7 @@ public record MovimientoCuentaDto(
     string Tipo,          // "Factura" (cargo) o "Pago" (abono)
     string Documento,
     string Descripcion,
+    string RegistradoPor, // RN-04: usuario que registró la factura o el pago
     decimal Cargo,
     decimal Abono,
     decimal Saldo);       // saldo acumulado después del movimiento

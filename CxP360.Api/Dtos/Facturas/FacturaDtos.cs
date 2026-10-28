@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using CxP360.Api.Dtos.Comun;
 using CxP360.Api.Dtos.Pagos;
 using CxP360.Api.Models;
 
@@ -47,7 +48,8 @@ public record FacturaDto(
     string? UsuarioAnulacion,
     DateTime? FechaAnulacion,
     List<LineaFacturaDto> Lineas,
-    List<PagoDto> Pagos);
+    List<PagoDto> Pagos,
+    List<AdjuntoDto> Comprobantes);
 
 /// <summary>Línea que se envía al registrar una factura.</summary>
 public record LineaFacturaRequest(
@@ -83,4 +85,14 @@ public record CrearFacturaRequest(
     // RN-12: al menos una línea de detalle
     [Required(ErrorMessage = "La factura debe tener al menos una línea de detalle.")]
     [MinLength(1, ErrorMessage = "La factura debe tener al menos una línea de detalle.")]
-    List<LineaFacturaRequest> Lineas);
+    List<LineaFacturaRequest> Lineas,
+
+    // RN-35: total impreso en la factura; debe coincidir con la suma de las líneas
+    [Range(typeof(decimal), "0.01", "9999999999.99",
+        ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
+        ErrorMessage = "Indique el total que aparece en la factura.")]
+    decimal TotalDocumento,
+
+    // RN-32: foto o PDF de la factura (obligatorio)
+    [Required(ErrorMessage = "Debe adjuntar la foto o el PDF de la factura.")]
+    ArchivoRequest Comprobante);

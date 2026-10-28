@@ -8,7 +8,8 @@ public record ConfiguracionDto(
     string Direccion,
     string Telefono,
     decimal PorcentajeIva,
-    int DiasCreditoDefault);
+    int DiasCreditoDefault,
+    decimal? LimitePagoEfectivo);
 
 public record ActualizarConfiguracionRequest(
     [Required(ErrorMessage = "El nombre de la empresa es obligatorio.")]
@@ -31,4 +32,10 @@ public record ActualizarConfiguracionRequest(
     decimal PorcentajeIva,
 
     [Range(0, 120, ErrorMessage = "Los días de crédito deben estar entre 0 y 120.")]
-    int DiasCreditoDefault);
+    int DiasCreditoDefault,
+
+    // RN-36: vacío = sin límite para pagos en efectivo
+    [Range(typeof(decimal), "0.01", "9999999999.99",
+        ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
+        ErrorMessage = "El límite de pago en efectivo debe ser mayor a cero, o dejarse vacío.")]
+    decimal? LimitePagoEfectivo = null);

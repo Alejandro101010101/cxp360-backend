@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Linq.Expressions;
+using CxP360.Api.Dtos.Comun;
 using CxP360.Api.Models;
 
 namespace CxP360.Api.Dtos.Pagos;
@@ -16,6 +17,7 @@ public record PagoDto(
     decimal Monto,
     int FormaPagoId,
     string FormaPago,
+    bool FormaRequiereReferencia,   // false = efectivo
     int? BancoId,
     string? Banco,
     string? NumeroReferencia,
@@ -25,7 +27,8 @@ public record PagoDto(
     string UsuarioRegistro,
     DateTime FechaRegistro,
     decimal SaldoFactura,
-    EstadoFactura EstadoFactura);
+    EstadoFactura EstadoFactura,
+    List<AdjuntoDto> Comprobantes);
 
 /// <summary>Datos para registrar un pago total o parcial (RF-20, RF-21).</summary>
 public record RegistrarPagoRequest(
@@ -48,7 +51,10 @@ public record RegistrarPagoRequest(
     string? NumeroReferencia,
 
     // RN-25: true cuando el usuario ya confirmó un posible pago duplicado
-    bool ConfirmarDuplicado = false);
+    bool ConfirmarDuplicado = false,
+
+    // RN-33: obligatorio en cheque, transferencia y depósito; opcional en efectivo
+    ArchivoRequest? Comprobante = null);
 
 public static class PagoMapeo
 {
@@ -64,6 +70,7 @@ public static class PagoMapeo
         p.Monto,
         p.FormaPagoId,
         p.FormaPago.Nombre,
+        p.FormaPago.RequiereReferencia,
         p.BancoId,
         p.Banco != null ? p.Banco.Nombre : null,
         p.NumeroReferencia,
@@ -73,5 +80,10 @@ public static class PagoMapeo
         p.Usuario.NombreCompleto,
         p.FechaRegistro,
         p.Factura.Saldo,
-        p.Factura.Estado);
+        p.Factura.Estado,
+        p.Adjuntos
+            .OrderBy(a => a.Id)
+            .Select(a => new AdjuntoDto(a.Id, a.NombreArchivo, a.TipoContenido, a.TamanoBytes,
+                                        a.Usuario.NombreCompleto, a.FechaRegistro))
+            .ToList());
 }

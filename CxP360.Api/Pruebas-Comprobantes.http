@@ -1,0 +1,236 @@
+# ======================================================================
+#  CxP360 – Pruebas de COMPROBANTES y CONTROLES DE MONTOS
+#  Requiere haber ejecutado el script 04_comprobantes_y_controles.sql.
+#  Ejecuta las peticiones EN ORDEN con "Send Request".
+#
+#  Los archivos viajan en Base64. Para las pruebas se usan archivos
+#  mínimos válidos: una imagen PNG de 1 píxel y un PDF vacío.
+#  Formas de pago: 1 Efectivo · 2 Cheque · 3 Transferencia · 4 Depósito
+# ======================================================================
+
+@host = http://localhost:5288
+@png = iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
+@pdf = JVBERi0xLjQKJUVPRg==
+
+### 0.1 Login del Operador
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "nombreUsuario": "admin",
+  "password": "Admin2026!"
+}
+
+### 0.2 Proveedor Cementos del Sur
+# @name prov
+GET {{host}}/api/proveedores?buscar=4521367-1
+Authorization: Bearer {{login.response.body.token}}
+
+### 0.3 Configuración: LimitePagoEfectivo debe ser 5000.00 (RN-36)
+GET {{host}}/api/configuracion
+Authorization: Bearer {{login.response.body.token}}
+
+########################################################################
+# FACTURAS
+########################################################################
+
+### C1. Factura SIN comprobante → 400 "Debe adjuntar la foto o el PDF de la factura." (RN-32)
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{prov.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "2001",
+  "fechaEmision": "2026-10-20",
+  "lineas": [ { "descripcion": "Block de 15 cm", "cantidad": 500, "precioUnitario": 6.25 } ],
+  "totalDocumento": 3125.00
+}
+
+### C2. Total de la factura distinto a la suma de líneas → 400 con la diferencia (RN-35)
+#      Líneas: 500 × Q6.25 = Q3,125.00 · Factura dice Q3,215.00 (error de digitación)
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{prov.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "2001",
+  "fechaEmision": "2026-10-20",
+  "lineas": [ { "descripcion": "Block de 15 cm", "cantidad": 500, "precioUnitario": 6.25 } ],
+  "totalDocumento": 3215.00,
+  "comprobante": { "nombreArchivo": "factura-2001.png", "tipoContenido": "image/png", "contenido": "{{png}}" }
+}
+
+### C3. Tipo de archivo no permitido (texto) → 400 (RN-34)
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{prov.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "2001",
+  "fechaEmision": "2026-10-20",
+  "lineas": [ { "descripcion": "Block de 15 cm", "cantidad": 500, "precioUnitario": 6.25 } ],
+  "totalDocumento": 3125.00,
+  "comprobante": { "nombreArchivo": "notas.txt", "tipoContenido": "text/plain", "contenido": "SG9sYQ==" }
+}
+
+### C4. Archivo DISFRAZADO: dice ser PDF pero su contenido es una imagen → 400 (RN-34)
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{prov.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "2001",
+  "fechaEmision": "2026-10-20",
+  "lineas": [ { "descripcion": "Block de 15 cm", "cantidad": 500, "precioUnitario": 6.25 } ],
+  "totalDocumento": 3125.00,
+  "comprobante": { "nombreArchivo": "falso.pdf", "tipoContenido": "application/pdf", "contenido": "{{png}}" }
+}
+
+### C5. Factura CORRECTA con su foto → 201, "comprobantes" con 1 archivo
+#      Total Q6,250.00 (sirve para probar el límite de efectivo)
+# @name factura
+POST {{host}}/api/facturas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "proveedorId": {{prov.response.body.$[0].id}},
+  "serie": "A",
+  "numero": "2001",
+  "fechaEmision": "2026-10-20",
+  "lineas": [ { "descripcion": "Block de 15 cm", "cantidad": 1000, "precioUnitario": 6.25 } ],
+  "totalDocumento": 6250.00,
+  "comprobante": { "nombreArchivo": "factura-2001.png", "tipoContenido": "image/png", "contenido": "{{png}}" }
+}
+
+### C6. Ver el comprobante de la factura → 200, Content-Type: image/png
+GET {{host}}/api/adjuntos/{{factura.response.body.$.comprobantes[0].id}}
+Authorization: Bearer {{login.response.body.token}}
+
+########################################################################
+# PAGOS
+########################################################################
+
+### C7. TRANSFERENCIA sin comprobante → 400 (RN-33)
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura.response.body.id}},
+  "fechaPago": "2026-10-27",
+  "monto": 1000.00,
+  "formaPagoId": 3,
+  "bancoId": 2,
+  "numeroReferencia": "TRF-778899"
+}
+
+### C8. EFECTIVO por Q5,500 (supera el límite de Q5,000) → 400 (RN-36)
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura.response.body.id}},
+  "fechaPago": "2026-10-27",
+  "monto": 5500.00,
+  "formaPagoId": 1
+}
+
+### C9. EFECTIVO por Q1,250 sin comprobante → 201 (el recibo firmado se adjunta después)
+# @name pagoEfectivo
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura.response.body.id}},
+  "fechaPago": "2026-10-27",
+  "monto": 1250.00,
+  "formaPagoId": 1
+}
+
+### C10. Adjuntar el RECIBO FIRMADO al pago en efectivo → 201
+POST {{host}}/api/pagos/{{pagoEfectivo.response.body.id}}/comprobantes
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "nombreArchivo": "recibo-firmado.png",
+  "tipoContenido": "image/png",
+  "contenido": "{{png}}"
+}
+
+### C11. TRANSFERENCIA por el saldo (Q5,000) CON comprobante PDF → 201, estado Pagada
+POST {{host}}/api/pagos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "facturaId": {{factura.response.body.id}},
+  "fechaPago": "2026-10-27",
+  "monto": 5000.00,
+  "formaPagoId": 3,
+  "bancoId": 2,
+  "numeroReferencia": "TRF-778899",
+  "comprobante": { "nombreArchivo": "transferencia.pdf", "tipoContenido": "application/pdf", "contenido": "{{pdf}}" }
+}
+
+### C12. Detalle de la factura → 200: 1 comprobante de factura y 2 pagos, cada uno con su comprobante
+GET {{host}}/api/facturas/{{factura.response.body.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+########################################################################
+# PARÁMETRO (Administrador)
+########################################################################
+
+### C13. Login del Administrador
+# @name loginAdmin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "nombreUsuario": "admin",
+  "password": "Admin2026!"
+}
+
+### C14. Cambiar el límite de efectivo a Q3,000 → 200
+PUT {{host}}/api/configuracion
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{
+  "nombre": "Ferretería Los Esclavos",
+  "nit": "9876543-2",
+  "direccion": "Aldea Los Esclavos, Cuilapa, Santa Rosa",
+  "telefono": "7886-0000",
+  "porcentajeIva": 12,
+  "diasCreditoDefault": 30,
+  "limitePagoEfectivo": 3000
+}
+
+### C15. Volver al límite de Q5,000 → 200
+PUT {{host}}/api/configuracion
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{
+  "nombre": "Ferretería Los Esclavos",
+  "nit": "9876543-2",
+  "direccion": "Aldea Los Esclavos, Cuilapa, Santa Rosa",
+  "telefono": "7886-0000",
+  "porcentajeIva": 12,
+  "diasCreditoDefault": 30,
+  "limitePagoEfectivo": 5000
+}
+
+###

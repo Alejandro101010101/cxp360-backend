@@ -25,6 +25,7 @@ public class Factura
     public Usuario? UsuarioAnulacion { get; set; }
     public List<DetalleFactura> Detalles { get; set; } = new();   // composición
     public List<Pago> Pagos { get; set; } = new();
+    public List<Adjunto> Adjuntos { get; set; } = new();                  // RN-32: factura escaneada o foto
 
     /// <summary>
     /// RN-14: calcula el total a partir de las líneas (precios con IVA incluido)

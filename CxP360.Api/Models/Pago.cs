@@ -22,6 +22,7 @@ public class Pago
     public Banco? Banco { get; set; }
     public Usuario Usuario { get; set; } = null!;
     public Usuario? UsuarioAnulacion { get; set; }
+    public List<Adjunto> Adjuntos { get; set; } = new();                  // RN-33: voucher o recibo firmado
 
     /// <summary>RN-26: anula el pago registrando motivo, usuario y fecha.</summary>
     public void Anular(string motivo, int usuarioId, DateTime fecha)

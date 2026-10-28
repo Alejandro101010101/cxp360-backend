@@ -18,6 +18,7 @@ public class CxP360DbContext(DbContextOptions<CxP360DbContext> options) : DbCont
     public DbSet<Pago> Pagos => Set<Pago>();
     public DbSet<FormaPago> FormasPago => Set<FormaPago>();
     public DbSet<Banco> Bancos => Set<Banco>();
+    public DbSet<Adjunto> Adjuntos => Set<Adjunto>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -109,6 +110,29 @@ public class CxP360DbContext(DbContextOptions<CxP360DbContext> options) : DbCont
             e.Property(x => x.Cantidad).HasPrecision(10, 2);
             e.Property(x => x.Subtotal)
              .HasComputedColumnSql("CAST(ROUND([Cantidad] * [PrecioUnitario], 2) AS DECIMAL(12,2))", stored: true);
+        });
+
+        // ---------- Comprobantes adjuntos ----------
+        modelBuilder.Entity<Adjunto>(e =>
+        {
+            e.ToTable("Adjuntos");
+            e.Property(x => x.Id).HasColumnName("AdjuntoId");
+            e.Property(x => x.FechaRegistro).HasDefaultValueSql("SYSDATETIME()");
+
+            e.HasOne(x => x.Factura)
+             .WithMany(f => f.Adjuntos)
+             .HasForeignKey(x => x.FacturaId)
+             .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.Pago)
+             .WithMany(p => p.Adjuntos)
+             .HasForeignKey(x => x.PagoId)
+             .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.Usuario)
+             .WithMany()
+             .HasForeignKey(x => x.UsuarioId)
+             .OnDelete(DeleteBehavior.Restrict);
         });
 
         // ---------- Pagos ----------
