@@ -482,3 +482,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Produccion: contiene claves, nunca subir
+appsettings.Production.json
+*.publishSettings
+*.pubxml.user
