@@ -79,6 +79,21 @@ builder.Services
             NameClaimType = "name",
             RoleClaimType = "role"
         };
+
+        // RN-02: el token solo vale si su usuario sigue existiendo y está activo.
+        // Así, un token de una base recreada o de un usuario inactivado recibe 401
+        // y el frontend envía al inicio de sesión.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async contexto =>
+            {
+                var db = contexto.HttpContext.RequestServices.GetRequiredService<CxP360DbContext>();
+                var valido = int.TryParse(contexto.Principal?.FindFirst("sub")?.Value, out var usuarioId)
+                    && await db.Usuarios.AnyAsync(u => u.Id == usuarioId && u.Activo);
+                if (!valido)
+                    contexto.Fail("El usuario de la sesión ya no existe o está inactivo.");
+            }
+        };
     });
 
 // Autorización: RN-02, toda la API exige haber iniciado sesión,
